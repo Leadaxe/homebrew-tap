@@ -18,7 +18,11 @@ jobs:
   update:
     runs-on: ubuntu-24.04
     steps:
+      # Always check out main, even when manually dispatched from another ref.
+      # Otherwise `git push origin HEAD:main` could publish unrelated commits.
       - uses: actions/checkout@v6
+        with:
+          ref: main
 
       - name: Refresh from latest stable upstream release
         env:

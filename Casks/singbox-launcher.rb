@@ -12,15 +12,19 @@ cask "singbox-launcher" do
     strategy :github_latest
   end
 
-  depends_on macos: ">= :big_sur"
+  depends_on :macos
 
   # The upstream release ZIP keeps the app under the CI artifact directory.
   app "artifacts-darwin/singbox-launcher.app"
 
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/singbox-launcher.app"]
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/singbox-launcher.app"]
   end
+
+  zap trash: [
+    "~/Library/Application Support/singbox-launcher",
+    "~/Library/Logs/singbox-launcher",
+  ]
 
   caveats <<~EOS
     The macOS quarantine attribute is cleared automatically for this app,

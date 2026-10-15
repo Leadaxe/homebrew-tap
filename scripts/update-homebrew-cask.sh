@@ -28,10 +28,11 @@ if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 asset="singbox-launcher-${tag}-macos.zip"
-asset_json="$(jq -cer --arg name "$asset" '.assets[] | select(.name == $name)' <<< "$release_json")" || {
-  echo "No '$asset' in stable release $tag; not updating" >&2
-  exit 1
-}
+asset_json="$(jq -c --arg name "$asset" '.assets[] | select(.name == $name)' <<< "$release_json")"
+if [[ -z "$asset_json" ]]; then
+  echo "::notice::macOS asset '$asset' is not available yet; retrying on the next run"
+  exit 0
+fi
 
 # GitHub provides the SHA-256 digest for release assets. Older assets may lack
 # this field, so retain checksums.txt as a compatibility fallback.
