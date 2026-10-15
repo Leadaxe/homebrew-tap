@@ -1,6 +1,6 @@
 cask "singbox-launcher" do
-  version "2.3.10"
-  sha256 "f84ffb0ba1ebfcd096adb18f53195cc91244cbb8962a964bdd1cc59abb37061d"
+  version "2.4.0"
+  sha256 "057af85b988521181a9e13ab2a13856782010ea9ad165a2589943f4bc80860f3"
 
   url "https://github.com/Leadaxe/singbox-launcher/releases/download/v#{version}/singbox-launcher-v#{version}-macos.zip"
   name "singbox-launcher"
