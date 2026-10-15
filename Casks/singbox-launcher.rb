@@ -18,6 +18,8 @@ cask "singbox-launcher" do
   app "artifacts-darwin/singbox-launcher.app"
 
   postflight_steps do
+    # GitHub Actions artifacts may lose the executable bit before release ZIP packaging.
+    set_permissions "singbox-launcher.app/Contents/MacOS/singbox-launcher", "0755", base: :appdir
     run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/singbox-launcher.app"]
   end
 
