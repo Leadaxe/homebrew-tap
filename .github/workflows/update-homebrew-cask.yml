@@ -55,6 +55,20 @@ jobs:
           printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check
           unzip -tq "$archive" > /dev/null
           unzip -Z -1 "$archive" | grep -Fx "artifacts-darwin/singbox-launcher.app/Contents/Info.plist"
+
+          # Inform maintainers when upstream packaging drops the execute bit.
+          # The Cask repairs it in postflight_steps, so do not block updates.
+          python3 - "$archive" <<'PY'
+          import sys
+          import zipfile
+
+          binary = "artifacts-darwin/singbox-launcher.app/Contents/MacOS/singbox-launcher"
+          with zipfile.ZipFile(sys.argv[1]) as release_zip:
+              mode = release_zip.getinfo(binary).external_attr >> 16
+          if (mode & 0o111) != 0o111:
+              print(f"::warning::Release ZIP binary mode {mode & 0o777:04o} lacks executable bits; Cask postflight_steps will restore 0755")
+          PY
+
           echo "Verified macOS release asset and .app bundle"
 
       - name: Commit Cask update
