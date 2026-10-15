@@ -1,0 +1,88 @@
+name: Update singbox-launcher Cask
+
+# The tap is separate from Leadaxe/singbox-launcher. The source repository's
+# release workflow uses GITHUB_TOKEN, so poll its latest stable release here.
+"on":
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-singbox-launcher-cask
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      # Always check out main, even when manually dispatched from another ref.
+      # Otherwise `git push origin HEAD:main` could publish unrelated commits.
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Refresh from latest stable upstream release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/update-homebrew-cask.sh
+
+      - name: Validate Cask and download
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -c Casks/singbox-launcher.rb
+          bash -n scripts/update-homebrew-cask.sh
+
+          if git diff --quiet -- Casks/singbox-launcher.rb; then
+            echo "Cask is already up to date"
+            exit 0
+          fi
+
+          version="$(sed -nE 's/^  version "([^"]+)"$/\1/p' Casks/singbox-launcher.rb)"
+          checksum="$(sed -nE 's/^  sha256 "([0-9a-f]{64})"$/\1/p' Casks/singbox-launcher.rb)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! "$checksum" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Invalid version or SHA-256 in Cask" >&2
+            exit 1
+          fi
+
+          archive="$RUNNER_TEMP/singbox-launcher.zip"
+          curl --fail --location --retry 3 --silent --show-error \
+            "https://github.com/Leadaxe/singbox-launcher/releases/download/v${version}/singbox-launcher-v${version}-macos.zip" \
+            --output "$archive"
+          printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check
+          unzip -tq "$archive" > /dev/null
+          unzip -Z -1 "$archive" | grep -Fx "artifacts-darwin/singbox-launcher.app/Contents/Info.plist"
+
+          # Inform maintainers when upstream packaging drops the execute bit.
+          # The Cask repairs it in postflight_steps, so do not block updates.
+          python3 - "$archive" <<'PY'
+          import sys
+          import zipfile
+
+          binary = "artifacts-darwin/singbox-launcher.app/Contents/MacOS/singbox-launcher"
+          with zipfile.ZipFile(sys.argv[1]) as release_zip:
+              mode = release_zip.getinfo(binary).external_attr >> 16
+          if (mode & 0o111) != 0o111:
+              print(f"::warning::Release ZIP binary mode {mode & 0o777:04o} lacks executable bits; Cask postflight_steps will restore 0755")
+          PY
+
+          echo "Verified macOS release asset and .app bundle"
+
+      - name: Commit Cask update
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- Casks/singbox-launcher.rb; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          version="$(sed -nE 's/^  version "([^"]+)"$/\1/p' Casks/singbox-launcher.rb)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- Casks/singbox-launcher.rb
+          git commit -m "chore(homebrew): update Cask to v${version}"
+          # Do not overwrite maintainer changes. The next scheduled run retries.
+          git push origin HEAD:main
